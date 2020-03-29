@@ -20,7 +20,7 @@ setuptools.setup(
         "Operating System :: MacOS",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
         "Environment :: Console :: Curses",
-        "Natural Language :: English ",
+        "Natural Language :: English",
     ],
     license="MIT",
     keywords="protein structure model trajectory view terminal",

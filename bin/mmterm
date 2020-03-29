@@ -8,7 +8,7 @@ parser = argparse.ArgumentParser(description="View proteins and trajectories in 
     epilog="See https://github.com/jgreener64/mmterm for more.")
 parser.add_argument("in_file", help="the file to view")
 parser.add_argument("-f", "--format", choices=["pdb", "mmcif", "mmtf"],
-    help="the file format, default infers from the file extension")
+    help="the file format, by default infers from the file extension")
 parser.add_argument("-m", "--model", type=int, default=1,
     help="the model to show initially, default 1")
 parser.add_argument("-c", "--chains", nargs="*", default=[],
