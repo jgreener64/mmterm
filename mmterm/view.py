@@ -5,6 +5,8 @@ import sys
 import argparse
 import termios
 import fcntl
+from io import StringIO
+import logging
 
 import numpy as np
 from drawille import Canvas, line
@@ -26,17 +28,29 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
     if file_format is None:
         file_format = os.path.basename(in_file).rsplit(".", 1)[-1]
 
+    # Handle stdin
+    if in_file == "-":
+        contents = sys.stdin.read()
+        struct_file = StringIO(contents)
+        try:
+            # redirect stdin from pipe back to terminal
+            sys.stdin = open('/dev/tty','r')
+        except:
+            logging.error("Piping structures not supported on this system (no /dev/tty)")
+    else:
+        struct_file = in_file
+
     if file_format.lower() == "pdb":
         from Bio.PDB import PDBParser
         p = PDBParser()
-        struc = p.get_structure("", in_file)
+        struc = p.get_structure("", struct_file)
     elif file_format.lower() in ("mmcif", "cif"):
         from Bio.PDB.MMCIFParser import MMCIFParser
         p = MMCIFParser()
-        struc = p.get_structure("", in_file)
+        struc = p.get_structure("", struct_file)
     elif file_format.lower() == "mmtf":
         from Bio.PDB.mmtf import MMTFParser
-        struc = MMTFParser.get_structure(in_file)
+        struc = MMTFParser.get_structure(struct_file)
     else:
         print("Unrecognised file format")
         return
