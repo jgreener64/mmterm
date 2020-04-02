@@ -6,7 +6,6 @@ import argparse
 import termios
 import fcntl
 from io import StringIO
-import logging
 
 import numpy as np
 from drawille import Canvas, line
@@ -33,10 +32,11 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
         contents = sys.stdin.read()
         struct_file = StringIO(contents)
         try:
-            # redirect stdin from pipe back to terminal
-            sys.stdin = open('/dev/tty','r')
+            # Redirect stdin from pipe back to terminal
+            sys.stdin = open("/dev/tty", "r")
         except:
-            logging.error("Piping structures not supported on this system (no /dev/tty)")
+            print("Piping structures not supported on this system (no /dev/tty)")
+            return
     else:
         struct_file = in_file
 

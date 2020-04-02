@@ -49,6 +49,9 @@ mmterm 4KPY.pdb -c A B
 
 # Decrease the size of the viewing box
 mmterm 1FME.pdb -s 50
+
+# Read from stdin
+cat 1FME.pdb | mmterm -f pdb -
 ```
 
 You can also use mmterm to view proteins from within other Python scripts:
