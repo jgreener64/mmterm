@@ -6,7 +6,7 @@ from mmterm import view_protein
 
 parser = argparse.ArgumentParser(description="View proteins and trajectories in the terminal.",
     epilog="See https://github.com/jgreener64/mmterm for more.")
-parser.add_argument("in_file", help="the file to view")
+parser.add_argument("in_file", help="the file to view, use - to read stdin")
 parser.add_argument("-f", "--format", choices=["pdb", "mmcif", "mmtf"],
     help="the file format, by default infers from the file extension")
 parser.add_argument("-m", "--model", type=int, default=1,
