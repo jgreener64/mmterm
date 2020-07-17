@@ -3,8 +3,7 @@
 import os
 import sys
 import argparse
-import termios
-import fcntl
+import curses
 from io import StringIO
 
 import numpy as np
@@ -96,9 +95,12 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
     if curr_model > len(struc):
         print("Can't find that model")
         return
+
+    # Build help strings
     info_str = "{} with {} models, {} chains ({}), {} residues, {} atoms".format(
                     os.path.basename(in_file), len(struc), len(chain_ids),
                     "".join(chain_ids), res_counter, atom_counter)
+    help_str = "W/A/S/D rotates, T/F/G/H moves, I/O zooms, U spins, P cycles models, Q quits"
 
     # Make square bounding box of a set size and determine zoom
     x_min, x_max = float(coords[curr_model - 1, :, 0].min()), float(coords[curr_model - 1, :, 0].max())
@@ -111,16 +113,24 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
     y_min = zoom * (y_min - (box_bound - y_diff) / 2.0)
     y_max = zoom * (y_max + (box_bound - y_diff) / 2.0)
 
-    # See https://stackoverflow.com/questions/13207678/whats-the-simplest-way-of-detecting-keyboard-input-in-python-from-the-terminal/13207724
-    fd = sys.stdin.fileno()
+    # Set up curses screen
+    # https://docs.python.org/3/howto/curses.html
+    stdscr = curses.initscr()
+    curses.noecho()
+    curses.cbreak()
+    curses.curs_set(False)
+    stdscr.keypad(True)
 
-    oldterm = termios.tcgetattr(fd)
-    newattr = termios.tcgetattr(fd)
-    newattr[3] = newattr[3] & ~termios.ICANON & ~termios.ECHO
-    termios.tcsetattr(fd, termios.TCSANOW, newattr)
+    # Divide curses screen into windows
+    window_info = stdscr.subwin(2, curses.COLS - 1,  # height, width
+                                0, 0)                # begin_y, begin_x
+    window_structure = stdscr.subwin(curses.LINES - 1 - 2, curses.COLS - 1,  # height, width
+                                     2, 0)                                   # begin_y, begin_x
 
-    oldflags = fcntl.fcntl(fd, fcntl.F_GETFL)
-    fcntl.fcntl(fd, fcntl.F_SETFL, oldflags | os.O_NONBLOCK)
+    # Print help strings (only need to do this once)
+    window_info.addnstr(0, 0, info_str, window_info.getmaxyx()[1] - 1)
+    window_info.addnstr(1, 0, help_str, window_info.getmaxyx()[1] - 1)
+    window_info.refresh()
 
     canvas = Canvas()
     trans_x, trans_y = 0.0, 0.0
@@ -128,7 +138,6 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
 
     try:
         while True:
-            os.system("clear")
             points = []
 
             for x_start, y_start, x_end, y_end in (
@@ -161,12 +170,12 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
                         for x, y in line(x_start, y_start, x_end, y_end):
                             points.append([x, y])
 
-            print(info_str)
-            print("W/A/S/D rotates, T/F/G/H moves, I/O zooms, U spins, P cycles models, Q quits")
+            # Update displayed structure
             canvas.clear()
             for x, y in points:
                 canvas.set(x, y)
-            print(canvas.frame())
+            window_structure.addstr(0, 0, canvas.frame())
+            window_structure.refresh()
 
             counter = 0
             while True:
@@ -181,37 +190,49 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
                                 curr_model = 1
                         break
                 try:
-                    k = sys.stdin.read(1)
-                    if k:
-                        if k.upper() == "O":
+                    c = stdscr.getch()
+                    if c != curses.ERR:
+                        if c in (ord("o"), ord("O")):
                             zoom /= zoom_speed
-                        elif k.upper() == "I":
+                        elif c in (ord("i"), ord("I")):
                             zoom *= zoom_speed
-                        elif k.upper() == "F":
+                        elif c in (ord("f"), ord("F")):
                             trans_x -= trans_speed
-                        elif k.upper() == "H":
+                        elif c in (ord("h"), ord("H")):
                             trans_x += trans_speed
-                        elif k.upper() == "G":
+                        elif c in (ord("g"), ord("G")):
                             trans_y -= trans_speed
-                        elif k.upper() == "T":
+                        elif c in (ord("t"), ord("T")):
                             trans_y += trans_speed
-                        elif k.upper() == "S":
+                        elif c in (ord("s"), ord("S")):
                             rot_x -= rot_speed
-                        elif k.upper() == "W":
+                        elif c in (ord("w"), ord("W")):
                             rot_x += rot_speed
-                        elif k.upper() == "A":
+                        elif c in (ord("a"), ord("A")):
                             rot_y -= rot_speed
-                        elif k.upper() == "D":
+                        elif c in (ord("d"), ord("D")):
                             rot_y += rot_speed
-                        elif k.upper() == "U":
+                        elif c in (ord("u"), ord("U")):
                             auto_spin = not auto_spin
-                        elif k.upper() == "P" and len(struc) > 1:
+                        elif c in (ord("p"), ord("P")) and len(struc) > 1:
                             cycle_models = not cycle_models
-                        elif k.upper() == "Q":
+                        elif c in (ord("q"), ord("Q")):
                             return
                         break
                 except IOError:
                     pass
+    except KeyboardInterrupt:
+        # If user presses Ctrl+C, pretend as if they pressed q.
+        return
     finally:
-        termios.tcsetattr(fd, termios.TCSAFLUSH, oldterm)
-        fcntl.fcntl(fd, fcntl.F_SETFL, oldflags)
+        # Teardown curses interface
+        curses.nocbreak()
+        curses.echo()
+        curses.curs_set(True)
+        stdscr.keypad(False)
+        curses.endwin()
+
+        # Make sure last view stays on screen
+        print(info_str)
+        print(help_str)
+        print(canvas.frame())
