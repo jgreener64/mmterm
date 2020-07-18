@@ -137,60 +137,67 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
     rot_x, rot_y = 0.0, 0.0
 
     try:
+        points = []
+        do_update = True
         while True:
             curses.napms(50)  # Delay a short while
 
-            points = []
+            # Re-draw structure if needed
+            if do_update:
+                points = []
+                for x_start, y_start, x_end, y_end in (
+                                    (x_min, y_min, x_max, y_min),
+                                    (x_max, y_min, x_max, y_max),
+                                    (x_max, y_max, x_min, y_max),
+                                    (x_min, y_max, x_min, y_min),
+                                ):
+                    for x, y in line(x_start, y_start, x_end, y_end):
+                        points.append([x, y])
 
-            for x_start, y_start, x_end, y_end in (
-                                (x_min, y_min, x_max, y_min),
-                                (x_max, y_min, x_max, y_max),
-                                (x_max, y_max, x_min, y_max),
-                                (x_min, y_max, x_min, y_min),
-                            ):
-                for x, y in line(x_start, y_start, x_end, y_end):
-                    points.append([x, y])
+                rot_mat_x = np.array([
+                                        [1.0,           0.0,            0.0],
+                                        [0.0, np.cos(rot_x), -np.sin(rot_x)],
+                                        [0.0, np.sin(rot_x),  np.cos(rot_x)],
+                                    ], dtype=np.float32)
+                rot_mat_y = np.array([
+                                        [ np.cos(rot_y), 0.0, np.sin(rot_y)],
+                                        [           0.0, 1.0,           0.0],
+                                        [-np.sin(rot_y), 0.0, np.cos(rot_y)],
+                                    ], dtype=np.float32)
+                trans_coords = coords[curr_model - 1] + np.array([trans_x, trans_y, 0.0], dtype=np.float32)
+                zoom_rot_coords = zoom * np.matmul(rot_mat_y, np.matmul(rot_mat_x, trans_coords.T)).T
 
-            rot_mat_x = np.array([
-                                    [1.0,           0.0,            0.0],
-                                    [0.0, np.cos(rot_x), -np.sin(rot_x)],
-                                    [0.0, np.sin(rot_x),  np.cos(rot_x)],
-                                ], dtype=np.float32)
-            rot_mat_y = np.array([
-                                    [ np.cos(rot_y), 0.0, np.sin(rot_y)],
-                                    [           0.0, 1.0,           0.0],
-                                    [-np.sin(rot_y), 0.0, np.cos(rot_y)],
-                                ], dtype=np.float32)
-            trans_coords = coords[curr_model - 1] + np.array([trans_x, trans_y, 0.0], dtype=np.float32)
-            zoom_rot_coords = zoom * np.matmul(rot_mat_y, np.matmul(rot_mat_x, trans_coords.T)).T
+                for i in range(coords.shape[1] - 1):
+                    if connections[i]:
+                        x_start, x_end = float(zoom_rot_coords[i, 0]), float(zoom_rot_coords[i + 1, 0])
+                        y_start, y_end = float(zoom_rot_coords[i, 1]), float(zoom_rot_coords[i + 1, 1])
+                        if x_min < x_start < x_max and x_min < x_end < x_max and y_min < y_start < y_max and y_min < y_end < y_max:
+                            for x, y in line(x_start, y_start, x_end, y_end):
+                                points.append([x, y])
 
-            for i in range(coords.shape[1] - 1):
-                if connections[i]:
-                    x_start, x_end = float(zoom_rot_coords[i, 0]), float(zoom_rot_coords[i + 1, 0])
-                    y_start, y_end = float(zoom_rot_coords[i, 1]), float(zoom_rot_coords[i + 1, 1])
-                    if x_min < x_start < x_max and x_min < x_end < x_max and y_min < y_start < y_max and y_min < y_end < y_max:
-                        for x, y in line(x_start, y_start, x_end, y_end):
-                            points.append([x, y])
-
-            # Update displayed structure
-            canvas.clear()
-            for x, y in points:
-                canvas.set(x, y)
-            window_structure.addstr(0, 0, canvas.frame())
-            window_structure.refresh()
+                # Update displayed structure
+                canvas.clear()
+                for x, y in points:
+                    canvas.set(x, y)
+                window_structure.addstr(0, 0, canvas.frame())
+                window_structure.refresh()
+                do_update = False
 
             # Prepare rotation/model selection for next time
             if auto_spin:
                 rot_y += spin_speed
+                do_update = True
             if cycle_models:
                 curr_model += 1
                 if curr_model > len(struc):
                     curr_model = 1
+                do_update = True
 
             # Handle keypresses
             try:
                 c = stdscr.getch()
                 if c != curses.ERR:
+                    do_update = True
                     if c in (ord("o"), ord("O")):
                         zoom /= zoom_speed
                     elif c in (ord("i"), ord("I")):
