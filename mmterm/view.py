@@ -14,11 +14,10 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
         print("Box size must be between 10 and 400")
         return
 
-    zoom_speed = 1.1
-    trans_speed = 1.0
-    rot_speed = 0.1
-    spin_speed = 0.01
-    action_count = 500
+    zoom_speed = 1.1   # scale factor / keypress
+    trans_speed = 1.0  # motion / keypress
+    rot_speed = 0.1    # rad / keypress
+    spin_speed = 0.01  # rad / frame
     auto_spin = False
     cycle_models = False
 
@@ -119,7 +118,7 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
     curses.noecho()
     curses.cbreak()
     curses.curs_set(False)
-    stdscr.keypad(True)
+    stdscr.keypad(True)  # Respond to keypresses w/o Enter
 
     # Divide curses screen into windows
     window_info = stdscr.subwin(2, curses.COLS - 1,  # height, width
@@ -138,6 +137,8 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
 
     try:
         while True:
+            curses.napms(50)  # Delay a short while
+
             points = []
 
             for x_start, y_start, x_end, y_end in (
@@ -177,50 +178,46 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
             window_structure.addstr(0, 0, canvas.frame())
             window_structure.refresh()
 
-            counter = 0
-            while True:
-                if auto_spin or cycle_models:
-                    counter += 1
-                    if counter == action_count:
-                        if auto_spin:
-                            rot_y += spin_speed
-                        if cycle_models:
-                            curr_model += 1
-                            if curr_model > len(struc):
-                                curr_model = 1
-                        break
-                try:
-                    c = stdscr.getch()
-                    if c != curses.ERR:
-                        if c in (ord("o"), ord("O")):
-                            zoom /= zoom_speed
-                        elif c in (ord("i"), ord("I")):
-                            zoom *= zoom_speed
-                        elif c in (ord("f"), ord("F")):
-                            trans_x -= trans_speed
-                        elif c in (ord("h"), ord("H")):
-                            trans_x += trans_speed
-                        elif c in (ord("g"), ord("G")):
-                            trans_y -= trans_speed
-                        elif c in (ord("t"), ord("T")):
-                            trans_y += trans_speed
-                        elif c in (ord("s"), ord("S")):
-                            rot_x -= rot_speed
-                        elif c in (ord("w"), ord("W")):
-                            rot_x += rot_speed
-                        elif c in (ord("a"), ord("A")):
-                            rot_y -= rot_speed
-                        elif c in (ord("d"), ord("D")):
-                            rot_y += rot_speed
-                        elif c in (ord("u"), ord("U")):
-                            auto_spin = not auto_spin
-                        elif c in (ord("p"), ord("P")) and len(struc) > 1:
-                            cycle_models = not cycle_models
-                        elif c in (ord("q"), ord("Q")):
-                            return
-                        break
-                except IOError:
-                    pass
+            # Prepare rotation/model selection for next time
+            if auto_spin:
+                rot_y += spin_speed
+            if cycle_models:
+                curr_model += 1
+                if curr_model > len(struc):
+                    curr_model = 1
+
+            # Handle keypresses
+            try:
+                c = stdscr.getch()
+                if c != curses.ERR:
+                    if c in (ord("o"), ord("O")):
+                        zoom /= zoom_speed
+                    elif c in (ord("i"), ord("I")):
+                        zoom *= zoom_speed
+                    elif c in (ord("f"), ord("F")):
+                        trans_x -= trans_speed
+                    elif c in (ord("h"), ord("H")):
+                        trans_x += trans_speed
+                    elif c in (ord("g"), ord("G")):
+                        trans_y -= trans_speed
+                    elif c in (ord("t"), ord("T")):
+                        trans_y += trans_speed
+                    elif c in (ord("s"), ord("S")):
+                        rot_x -= rot_speed
+                    elif c in (ord("w"), ord("W")):
+                        rot_x += rot_speed
+                    elif c in (ord("a"), ord("A")):
+                        rot_y -= rot_speed
+                    elif c in (ord("d"), ord("D")):
+                        rot_y += rot_speed
+                    elif c in (ord("u"), ord("U")):
+                        auto_spin = not auto_spin
+                    elif c in (ord("p"), ord("P")) and len(struc) > 1:
+                        cycle_models = not cycle_models
+                    elif c in (ord("q"), ord("Q")):
+                        return
+            except IOError:
+                pass
     except KeyboardInterrupt:
         # If user presses Ctrl+C, pretend as if they pressed q.
         return
