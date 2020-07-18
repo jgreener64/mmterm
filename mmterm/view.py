@@ -119,6 +119,7 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
     curses.cbreak()
     curses.curs_set(False)
     stdscr.keypad(True)  # Respond to keypresses w/o Enter
+    stdscr.nodelay(True)  # Don't block while waiting for keypress
 
     # Divide curses screen into windows
     window_info = stdscr.subwin(2, curses.COLS - 1,  # height, width
