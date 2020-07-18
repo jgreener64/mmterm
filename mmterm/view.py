@@ -3,8 +3,7 @@
 import os
 import sys
 import argparse
-import termios
-import fcntl
+import curses
 from io import StringIO
 
 import numpy as np
@@ -15,11 +14,10 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
         print("Box size must be between 10 and 400")
         return
 
-    zoom_speed = 1.1
-    trans_speed = 1.0
-    rot_speed = 0.1
-    spin_speed = 0.01
-    action_count = 500
+    zoom_speed = 1.1   # scale factor / keypress
+    trans_speed = 1.0  # motion / keypress
+    rot_speed = 0.1    # rad / keypress
+    spin_speed = 0.01  # rad / frame
     auto_spin = False
     cycle_models = False
 
@@ -96,9 +94,12 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
     if curr_model > len(struc):
         print("Can't find that model")
         return
+
+    # Build help strings
     info_str = "{} with {} models, {} chains ({}), {} residues, {} atoms".format(
                     os.path.basename(in_file), len(struc), len(chain_ids),
                     "".join(chain_ids), res_counter, atom_counter)
+    help_str = "W/A/S/D rotates, T/F/G/H moves, I/O zooms, U spins, P cycles models, Q quits"
 
     # Make square bounding box of a set size and determine zoom
     x_min, x_max = float(coords[curr_model - 1, :, 0].min()), float(coords[curr_model - 1, :, 0].max())
@@ -111,107 +112,132 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
     y_min = zoom * (y_min - (box_bound - y_diff) / 2.0)
     y_max = zoom * (y_max + (box_bound - y_diff) / 2.0)
 
-    # See https://stackoverflow.com/questions/13207678/whats-the-simplest-way-of-detecting-keyboard-input-in-python-from-the-terminal/13207724
-    fd = sys.stdin.fileno()
+    # Set up curses screen
+    # https://docs.python.org/3/howto/curses.html
+    stdscr = curses.initscr()
+    curses.noecho()
+    curses.cbreak()
+    curses.curs_set(False)
+    stdscr.keypad(True)  # Respond to keypresses w/o Enter
+    stdscr.nodelay(True)  # Don't block while waiting for keypress
 
-    oldterm = termios.tcgetattr(fd)
-    newattr = termios.tcgetattr(fd)
-    newattr[3] = newattr[3] & ~termios.ICANON & ~termios.ECHO
-    termios.tcsetattr(fd, termios.TCSANOW, newattr)
+    # Divide curses screen into windows
+    window_info = stdscr.subwin(2, curses.COLS - 1,  # height, width
+                                0, 0)                # begin_y, begin_x
+    window_structure = stdscr.subwin(curses.LINES - 1 - 2, curses.COLS - 1,  # height, width
+                                     2, 0)                                   # begin_y, begin_x
 
-    oldflags = fcntl.fcntl(fd, fcntl.F_GETFL)
-    fcntl.fcntl(fd, fcntl.F_SETFL, oldflags | os.O_NONBLOCK)
+    # Print help strings (only need to do this once)
+    window_info.addnstr(0, 0, info_str, window_info.getmaxyx()[1] - 1)
+    window_info.addnstr(1, 0, help_str, window_info.getmaxyx()[1] - 1)
+    window_info.refresh()
 
     canvas = Canvas()
     trans_x, trans_y = 0.0, 0.0
     rot_x, rot_y = 0.0, 0.0
 
     try:
+        points = []
+        do_update = True
         while True:
-            os.system("clear")
-            points = []
+            curses.napms(50)  # Delay a short while
 
-            for x_start, y_start, x_end, y_end in (
-                                (x_min, y_min, x_max, y_min),
-                                (x_max, y_min, x_max, y_max),
-                                (x_max, y_max, x_min, y_max),
-                                (x_min, y_max, x_min, y_min),
-                            ):
-                for x, y in line(x_start, y_start, x_end, y_end):
-                    points.append([x, y])
+            # Re-draw structure if needed
+            if do_update:
+                points = []
+                for x_start, y_start, x_end, y_end in (
+                                    (x_min, y_min, x_max, y_min),
+                                    (x_max, y_min, x_max, y_max),
+                                    (x_max, y_max, x_min, y_max),
+                                    (x_min, y_max, x_min, y_min),
+                                ):
+                    for x, y in line(x_start, y_start, x_end, y_end):
+                        points.append([x, y])
 
-            rot_mat_x = np.array([
-                                    [1.0,           0.0,            0.0],
-                                    [0.0, np.cos(rot_x), -np.sin(rot_x)],
-                                    [0.0, np.sin(rot_x),  np.cos(rot_x)],
-                                ], dtype=np.float32)
-            rot_mat_y = np.array([
-                                    [ np.cos(rot_y), 0.0, np.sin(rot_y)],
-                                    [           0.0, 1.0,           0.0],
-                                    [-np.sin(rot_y), 0.0, np.cos(rot_y)],
-                                ], dtype=np.float32)
-            trans_coords = coords[curr_model - 1] + np.array([trans_x, trans_y, 0.0], dtype=np.float32)
-            zoom_rot_coords = zoom * np.matmul(rot_mat_y, np.matmul(rot_mat_x, trans_coords.T)).T
+                rot_mat_x = np.array([
+                                        [1.0,           0.0,            0.0],
+                                        [0.0, np.cos(rot_x), -np.sin(rot_x)],
+                                        [0.0, np.sin(rot_x),  np.cos(rot_x)],
+                                    ], dtype=np.float32)
+                rot_mat_y = np.array([
+                                        [ np.cos(rot_y), 0.0, np.sin(rot_y)],
+                                        [           0.0, 1.0,           0.0],
+                                        [-np.sin(rot_y), 0.0, np.cos(rot_y)],
+                                    ], dtype=np.float32)
+                trans_coords = coords[curr_model - 1] + np.array([trans_x, trans_y, 0.0], dtype=np.float32)
+                zoom_rot_coords = zoom * np.matmul(rot_mat_y, np.matmul(rot_mat_x, trans_coords.T)).T
 
-            for i in range(coords.shape[1] - 1):
-                if connections[i]:
-                    x_start, x_end = float(zoom_rot_coords[i, 0]), float(zoom_rot_coords[i + 1, 0])
-                    y_start, y_end = float(zoom_rot_coords[i, 1]), float(zoom_rot_coords[i + 1, 1])
-                    if x_min < x_start < x_max and x_min < x_end < x_max and y_min < y_start < y_max and y_min < y_end < y_max:
-                        for x, y in line(x_start, y_start, x_end, y_end):
-                            points.append([x, y])
+                for i in range(coords.shape[1] - 1):
+                    if connections[i]:
+                        x_start, x_end = float(zoom_rot_coords[i, 0]), float(zoom_rot_coords[i + 1, 0])
+                        y_start, y_end = float(zoom_rot_coords[i, 1]), float(zoom_rot_coords[i + 1, 1])
+                        if x_min < x_start < x_max and x_min < x_end < x_max and y_min < y_start < y_max and y_min < y_end < y_max:
+                            for x, y in line(x_start, y_start, x_end, y_end):
+                                points.append([x, y])
 
-            print(info_str)
-            print("W/A/S/D rotates, T/F/G/H moves, I/O zooms, U spins, P cycles models, Q quits")
-            canvas.clear()
-            for x, y in points:
-                canvas.set(x, y)
-            print(canvas.frame())
+                # Update displayed structure
+                canvas.clear()
+                for x, y in points:
+                    canvas.set(x, y)
+                window_structure.addstr(0, 0, canvas.frame())
+                window_structure.refresh()
+                do_update = False
 
-            counter = 0
-            while True:
-                if auto_spin or cycle_models:
-                    counter += 1
-                    if counter == action_count:
-                        if auto_spin:
-                            rot_y += spin_speed
-                        if cycle_models:
-                            curr_model += 1
-                            if curr_model > len(struc):
-                                curr_model = 1
-                        break
-                try:
-                    k = sys.stdin.read(1)
-                    if k:
-                        if k.upper() == "O":
-                            zoom /= zoom_speed
-                        elif k.upper() == "I":
-                            zoom *= zoom_speed
-                        elif k.upper() == "F":
-                            trans_x -= trans_speed
-                        elif k.upper() == "H":
-                            trans_x += trans_speed
-                        elif k.upper() == "G":
-                            trans_y -= trans_speed
-                        elif k.upper() == "T":
-                            trans_y += trans_speed
-                        elif k.upper() == "S":
-                            rot_x -= rot_speed
-                        elif k.upper() == "W":
-                            rot_x += rot_speed
-                        elif k.upper() == "A":
-                            rot_y -= rot_speed
-                        elif k.upper() == "D":
-                            rot_y += rot_speed
-                        elif k.upper() == "U":
-                            auto_spin = not auto_spin
-                        elif k.upper() == "P" and len(struc) > 1:
-                            cycle_models = not cycle_models
-                        elif k.upper() == "Q":
-                            return
-                        break
-                except IOError:
-                    pass
+            # Prepare rotation/model selection for next time
+            if auto_spin:
+                rot_y += spin_speed
+                do_update = True
+            if cycle_models:
+                curr_model += 1
+                if curr_model > len(struc):
+                    curr_model = 1
+                do_update = True
+
+            # Handle keypresses
+            try:
+                c = stdscr.getch()
+                if c != curses.ERR:
+                    do_update = True
+                    if c in (ord("o"), ord("O")):
+                        zoom /= zoom_speed
+                    elif c in (ord("i"), ord("I")):
+                        zoom *= zoom_speed
+                    elif c in (ord("f"), ord("F")):
+                        trans_x -= trans_speed
+                    elif c in (ord("h"), ord("H")):
+                        trans_x += trans_speed
+                    elif c in (ord("g"), ord("G")):
+                        trans_y -= trans_speed
+                    elif c in (ord("t"), ord("T")):
+                        trans_y += trans_speed
+                    elif c in (ord("s"), ord("S")):
+                        rot_x -= rot_speed
+                    elif c in (ord("w"), ord("W")):
+                        rot_x += rot_speed
+                    elif c in (ord("a"), ord("A")):
+                        rot_y -= rot_speed
+                    elif c in (ord("d"), ord("D")):
+                        rot_y += rot_speed
+                    elif c in (ord("u"), ord("U")):
+                        auto_spin = not auto_spin
+                    elif c in (ord("p"), ord("P")) and len(struc) > 1:
+                        cycle_models = not cycle_models
+                    elif c in (ord("q"), ord("Q")):
+                        return
+            except IOError:
+                pass
+    except KeyboardInterrupt:
+        # If user presses Ctrl+C, pretend as if they pressed q.
+        return
     finally:
-        termios.tcsetattr(fd, termios.TCSAFLUSH, oldterm)
-        fcntl.fcntl(fd, fcntl.F_SETFL, oldflags)
+        # Teardown curses interface
+        curses.nocbreak()
+        curses.echo()
+        curses.curs_set(True)
+        stdscr.keypad(False)
+        curses.endwin()
+
+        # Make sure last view stays on screen
+        print(info_str)
+        print(help_str)
+        print(canvas.frame())
