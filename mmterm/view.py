@@ -9,14 +9,14 @@ from io import StringIO
 import numpy as np
 from drawille import Canvas, line
 
-ZOOM_SPEED = 1.1   # scale factor / keypress
-TRANS_SPEED = 1.0  # motion / keypress
-ROT_SPEED = 0.1    # rad / keypress
-SPIN_SPEED = 0.01  # rad / frame
+zoom_speed = 1.1   # scale factor / keypress
+trans_speed = 1.0  # motion / keypress
+rot_speed = 0.1    # rad / keypress
+spin_speed = 0.01  # rad / frame
 
 PROTEIN_BB_ATOMS = ["N", "CA", "C"]
 NUCLEIC_ACID_ATOMS = ["P", "O5'", "C5'", "C4'", "C3'", "O3'"]
-ATOMS_OF_INTEREST = PROTEIN_BB_ATOMS + NUCLEIC_ACID_ATOMS
+atoms_of_interest = PROTEIN_BB_ATOMS + NUCLEIC_ACID_ATOMS
 
 
 def get_coords_schrodinger(struc, chains):
@@ -44,7 +44,7 @@ def get_coords_schrodinger(struc, chains):
                 res_n = res.resnum
                 for atom in res.atom:
                     atom_counter += 1 if mi == 0 else 0
-                    if atom.pdbname.strip() in ATOMS_OF_INTEREST:
+                    if atom.pdbname.strip() in atoms_of_interest:
                         if mi == 0 and len(model_coords) > 0:
                             # Determine if the atom is connected to the previous atom
                             connections.append(chain_id == last_chain_id and (res_n == (last_res_n + 1) or res_n == last_res_n))
@@ -85,7 +85,7 @@ def get_coords_biopython(struc, chains):
                 res_n = res.get_id()[1]
                 for atom in res:
                     atom_counter += 1 if mi == 0 else 0
-                    if atom.get_name() in ATOMS_OF_INTEREST:
+                    if atom.get_name() in atoms_of_interest:
                         if mi == 0 and len(model_coords) > 0:
                             # Determine if the atom is connected to the previous atom
                             connections.append(chain_id == last_chain_id and (res_n == (last_res_n + 1) or res_n == last_res_n))
@@ -256,7 +256,7 @@ def view(in_file, file_format=None, curr_model=1, chains=[], box_size=100.0):
 
             # Prepare rotation/model selection for next time
             if auto_spin:
-                rot_y += SPIN_SPEED
+                rot_y += spin_speed
                 do_update = True
             if cycle_models:
                 curr_model += 1
@@ -270,25 +270,25 @@ def view(in_file, file_format=None, curr_model=1, chains=[], box_size=100.0):
                 if c != curses.ERR:
                     do_update = True
                     if c in (ord("o"), ord("O")):
-                        zoom /= ZOOM_SPEED
+                        zoom /= zoom_speed
                     elif c in (ord("i"), ord("I")):
-                        zoom *= ZOOM_SPEED
+                        zoom *= zoom_speed
                     elif c in (ord("f"), ord("F")):
-                        trans_x -= TRANS_SPEED
+                        trans_x -= trans_speed
                     elif c in (ord("h"), ord("H")):
-                        trans_x += TRANS_SPEED
+                        trans_x += trans_speed
                     elif c in (ord("g"), ord("G")):
-                        trans_y -= TRANS_SPEED
+                        trans_y -= trans_speed
                     elif c in (ord("t"), ord("T")):
-                        trans_y += TRANS_SPEED
+                        trans_y += trans_speed
                     elif c in (ord("s"), ord("S")):
-                        rot_x -= ROT_SPEED
+                        rot_x -= rot_speed
                     elif c in (ord("w"), ord("W")):
-                        rot_x += ROT_SPEED
+                        rot_x += rot_speed
                     elif c in (ord("a"), ord("A")):
-                        rot_y -= ROT_SPEED
+                        rot_y -= rot_speed
                     elif c in (ord("d"), ord("D")):
-                        rot_y += ROT_SPEED
+                        rot_y += rot_speed
                     elif c in (ord("u"), ord("U")):
                         auto_spin = not auto_spin
                     elif c in (ord("p"), ord("P")) and len(coords) > 1:
