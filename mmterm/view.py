@@ -28,7 +28,7 @@ def get_coords_schrodinger(struc, chains):
     if len(set([st.atom_total for st in struc])) > 1:
         print("Multiple models with varying number of atoms "
               "are not supported.")
-        sys.exit(1)
+        return None, None
 
     for mi, model in enumerate(struc):
         model_coords = []
@@ -54,7 +54,7 @@ def get_coords_schrodinger(struc, chains):
         if mi == 0:
             if model_coords.shape[0] == 0:
                 print("Nothing to show")
-                sys.exit(1)
+                return None, None
             coords_mean = model_coords.mean(0)
         model_coords -= coords_mean # Center on origin of first model
         coords.append(model_coords)
@@ -95,7 +95,7 @@ def get_coords_biopython(struc, chains):
         if mi == 0:
             if model_coords.shape[0] == 0:
                 print("Nothing to show")
-                sys.exit(1)
+                return None, None
             coords_mean = model_coords.mean(0)
         model_coords -= coords_mean # Center on origin of first model
         coords.append(model_coords)
@@ -121,7 +121,7 @@ def read_inputs(in_file, file_format, curr_model, chains):
             sys.stdin = open("/dev/tty", "r")
         except:
             print("Piping structures not supported on this system (no /dev/tty)")
-            sys.exit(1)
+            return None, None
     else:
         struct_file = in_file
 
@@ -145,26 +145,24 @@ def read_inputs(in_file, file_format, curr_model, chains):
         get_coords = get_coords_schrodinger
     else:
         print("Unrecognised file format")
-        sys.exit(1)
+        None, None
 
     coords, info = get_coords(struc, chains)
 
-    if curr_model > len(coords):
+    if not coords or curr_model > len(coords):
         print("Can't find that model")
-        sys.exit(1)
+        return None, None
 
     return np.array(coords), info
 
 
 def view(in_file, file_format=None, curr_model=1, chains=[], box_size=100.0):
-    if box_size < 10.0 or box_size > 400.0:
-        print("Box size must be between 10 and 400")
-        sys.exit(1)
-
     auto_spin = False
     cycle_models = False
 
     coords, info = read_inputs(in_file, file_format, curr_model, chains)
+    if not coords:
+        return
 
     # Build help strings
     info_str = (f"{os.path.basename(in_file)} with {info['num_struc']} models, "
