@@ -59,13 +59,13 @@ def get_coords_schrodinger(struc, chains):
         model_coords -= coords_mean # Center on origin of first model
         coords.append(model_coords)
 
-        info['chain_ids'] = chain_ids
-        info['model_coords'] = model_coords
-        info['atom_counter'] = atom_counter
-        info['res_counter'] = res_counter
-        info['num_struc'] = len(struc)
-        info['connections'] =  connections
-        return coords, info
+    info['chain_ids'] = chain_ids
+    info['model_coords'] = model_coords
+    info['atom_counter'] = atom_counter
+    info['res_counter'] = res_counter
+    info['num_struc'] = len(struc)
+    info['connections'] =  connections
+    return coords, info
 
 def get_coords_biopython(struc, chains):
     # Get coordinates
@@ -100,13 +100,13 @@ def get_coords_biopython(struc, chains):
         model_coords -= coords_mean # Center on origin of first model
         coords.append(model_coords)
 
-        info['chain_ids'] = chain_ids
-        info['model_coords'] = model_coords
-        info['atom_counter'] = atom_counter
-        info['res_counter'] = res_counter
-        info['num_struc'] = len(struc)
-        info['connections'] =  connections
-        return coords, info
+    info['chain_ids'] = chain_ids
+    info['model_coords'] = model_coords
+    info['atom_counter'] = atom_counter
+    info['res_counter'] = res_counter
+    info['num_struc'] = len(struc)
+    info['connections'] =  connections
+    return coords, info
 
 def read_inputs(in_file, file_format, curr_model, chains):
     # Infer file format from extension
