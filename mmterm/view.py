@@ -149,7 +149,7 @@ def read_inputs(in_file, file_format, curr_model, chains):
 
     coords, info = get_coords(struc, chains)
 
-    if not coords or curr_model > len(coords):
+    if coords is None or curr_model > len(coords):
         print("Can't find that model")
         return None, None
 
@@ -157,11 +157,15 @@ def read_inputs(in_file, file_format, curr_model, chains):
 
 
 def view(in_file, file_format=None, curr_model=1, chains=[], box_size=100.0):
+    if box_size < 10.0 or box_size > 400.0:
+        print("Box size must be between 10 and 400")
+        return
+
     auto_spin = False
     cycle_models = False
 
     coords, info = read_inputs(in_file, file_format, curr_model, chains)
-    if not coords:
+    if coords is None:
         return
 
     # Build help strings
