@@ -54,7 +54,7 @@ mmterm 1FME.pdb -s 50
 cat 1FME.pdb | mmterm -f pdb -
 ```
 
-You can also use mmterm to view proteins from the REPL, from ipython or from other Python scripts:
+You can also use mmterm to view proteins from the REPL, from IPython or from other Python scripts:
 
 ```python
 from mmterm import view
