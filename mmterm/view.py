@@ -9,22 +9,20 @@ from io import StringIO
 import numpy as np
 from drawille import Canvas, line
 
-zoom_speed = 1.1   # scale factor / keypress
-trans_speed = 1.0  # motion / keypress
-rot_speed = 0.1    # rad / keypress
-spin_speed = 0.01  # rad / frame
+zoom_speed = 1.1   # Scale factor / keypress
+trans_speed = 1.0  # Motion / keypress
+rot_speed = 0.1    # Rad / keypress
+spin_speed = 0.01  # Rad / frame
 
-PROTEIN_BB_ATOMS = ["N", "CA", "C"]
-NUCLEIC_ACID_ATOMS = ["P", "O5'", "C5'", "C4'", "C3'", "O3'"]
-atoms_of_interest = PROTEIN_BB_ATOMS + NUCLEIC_ACID_ATOMS
-
+protein_bb_atoms = ["N", "CA", "C"]
+nucleic_acid_atoms = ["P", "O5'", "C5'", "C4'", "C3'", "O3'"]
+atoms_of_interest = protein_bb_atoms + nucleic_acid_atoms
 
 def get_coords_schrodinger(struc, chains):
-    from schrodinger import structure
     coords, info, connections  = [], {}, []
     atom_counter, res_counter = 0, 0
     chain_ids = []
-    # make sure that all models have the same number of atoms
+    # Make sure that all models have the same number of atoms
     if len(set([st.atom_total for st in struc])) > 1:
         print("Multiple models with varying number of atoms "
               "are not supported.")
@@ -53,22 +51,20 @@ def get_coords_schrodinger(struc, chains):
         model_coords = np.array(model_coords)
         if mi == 0:
             if model_coords.shape[0] == 0:
-                print("Nothing to show")
                 return None, None
             coords_mean = model_coords.mean(0)
         model_coords -= coords_mean # Center on origin of first model
         coords.append(model_coords)
 
-    info['chain_ids'] = chain_ids
-    info['model_coords'] = model_coords
-    info['atom_counter'] = atom_counter
-    info['res_counter'] = res_counter
-    info['num_struc'] = len(struc)
-    info['connections'] =  connections
+    info["chain_ids"] = chain_ids
+    info["model_coords"] = model_coords
+    info["atom_counter"] = atom_counter
+    info["res_counter"] = res_counter
+    info["num_struc"] = len(struc)
+    info["connections"] =  connections
     return coords, info
 
 def get_coords_biopython(struc, chains):
-    # Get coordinates
     coords, info, connections = [], {}, []
     atom_counter, res_counter = 0, 0
     chain_ids = []
@@ -94,18 +90,17 @@ def get_coords_biopython(struc, chains):
         model_coords = np.array(model_coords)
         if mi == 0:
             if model_coords.shape[0] == 0:
-                print("Nothing to show")
                 return None, None
             coords_mean = model_coords.mean(0)
         model_coords -= coords_mean # Center on origin of first model
         coords.append(model_coords)
 
-    info['chain_ids'] = chain_ids
-    info['model_coords'] = model_coords
-    info['atom_counter'] = atom_counter
-    info['res_counter'] = res_counter
-    info['num_struc'] = len(struc)
-    info['connections'] =  connections
+    info["chain_ids"] = chain_ids
+    info["model_coords"] = model_coords
+    info["atom_counter"] = atom_counter
+    info["res_counter"] = res_counter
+    info["num_struc"] = len(struc)
+    info["connections"] =  connections
     return coords, info
 
 def read_inputs(in_file, file_format, curr_model, chains):
@@ -139,22 +134,21 @@ def read_inputs(in_file, file_format, curr_model, chains):
     elif file_format.lower() == "mmtf":
         from Bio.PDB.mmtf import MMTFParser
         struc = MMTFParser.get_structure(struct_file)
-    elif file_format.lower() in ["mae", "maegz"]:
+    elif file_format.lower() in ("mae", "maegz"):
         from schrodinger import structure
         struc = list(structure.StructureReader(struct_file))
         get_coords = get_coords_schrodinger
     else:
         print("Unrecognised file format")
-        None, None
+        return None, None
 
     coords, info = get_coords(struc, chains)
 
     if coords is None or curr_model > len(coords):
-        print("Can't find that model")
+        print("Nothing to show")
         return None, None
 
     return np.array(coords), info
-
 
 def view(in_file, file_format=None, curr_model=1, chains=[], box_size=100.0):
     if box_size < 10.0 or box_size > 400.0:
@@ -245,7 +239,7 @@ def view(in_file, file_format=None, curr_model=1, chains=[], box_size=100.0):
                         continue
                     x_start, x_end = float(zoom_rot_coords[i, 0]), float(zoom_rot_coords[i + 1, 0])
                     y_start, y_end = float(zoom_rot_coords[i, 1]), float(zoom_rot_coords[i + 1, 1])
-                    # check if the bond fits in the box
+                    # Check if the bond fits in the box
                     if x_min < x_start < x_max and x_min < x_end < x_max and y_min < y_start < y_max and y_min < y_end < y_max:
                         for x, y in line(x_start, y_start, x_end, y_end):
                             points.append([x, y])

@@ -5,9 +5,9 @@ Do you miss the resolution of 1990s RasMol?
 More seriously, have you ever wanted to get a feel for a protein/DNA/RNA structure on a remote system without having to copy it locally and load it in PyMol?
 
 If so, mmterm is for you.
-It gives you a quick interactive view of a PDB/mmCIF/MMTF file, purely in the terminal.
+It gives you a quick interactive view of a PDB/mmCIF/MMTF/MAE/MAEGZ file, purely in the terminal.
 It should work anywhere that the Python curses module works, i.e. anywhere but Windows.
-It is built on top of [drawille](https://github.com/asciimoo/drawille), [Biopython](https://github.com/biopython/biopython) and [NumPy](https://numpy.org).
+It is built on top of [drawille](https://github.com/asciimoo/drawille), [NumPy](https://numpy.org), [Biopython](https://github.com/biopython/biopython) and [Schrödinger](https://www.schrodinger.com/pythonapi).
 
 ## Installation
 
@@ -54,7 +54,7 @@ mmterm 1FME.pdb -s 50
 cat 1FME.pdb | mmterm -f pdb -
 ```
 
-You can also use mmterm to view proteins from within other Python scripts:
+You can also use mmterm to view proteins from the REPL, from ipython or from other Python scripts:
 
 ```python
 from mmterm import view
