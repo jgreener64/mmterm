@@ -1,1 +1,1 @@
-from .view import view_protein
+from .view import view

@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-
+import sys
 import argparse
 
-from mmterm import view_protein
+from mmterm import view
 
 parser = argparse.ArgumentParser(description="View proteins and trajectories in the terminal.",
     epilog="See https://github.com/jgreener64/mmterm for more.")
 parser.add_argument("in_file", help="the file to view, use - to read stdin")
-parser.add_argument("-f", "--format", choices=["pdb", "mmcif", "mmtf"],
+parser.add_argument("-f", "--format", choices=["pdb", "mmcif", "mmtf", "mae", "maegz"],
     help="the file format, by default infers from the file extension")
 parser.add_argument("-m", "--model", type=int, default=1,
     help="the model to show initially, default 1")
@@ -18,4 +18,8 @@ parser.add_argument("-s", "--boxsize", type=float, default=100.0,
 
 args = parser.parse_args()
 
-view_protein(args.in_file, args.format, args.model, args.chains, args.boxsize)
+if args.box_size < 10.0 or args.box_size > 400.0:
+    print("Box size must be between 10 and 400")
+    sys.exit(1)
+
+view(args.in_file, args.format, args.model, args.chains, args.boxsize)

@@ -57,6 +57,6 @@ cat 1FME.pdb | mmterm -f pdb -
 You can also use mmterm to view proteins from within other Python scripts:
 
 ```python
-from mmterm import view_protein
-view_protein("1FME.pdb")
+from mmterm import view
+view("1FME.pdb")
 ```

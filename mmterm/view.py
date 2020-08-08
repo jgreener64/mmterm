@@ -9,21 +9,108 @@ from io import StringIO
 import numpy as np
 from drawille import Canvas, line
 
-def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=100.0):
-    if box_size < 10.0 or box_size > 400.0:
-        print("Box size must be between 10 and 400")
-        return
+zoom_speed = 1.1   # scale factor / keypress
+trans_speed = 1.0  # motion / keypress
+rot_speed = 0.1    # rad / keypress
+spin_speed = 0.01  # rad / frame
 
-    zoom_speed = 1.1   # scale factor / keypress
-    trans_speed = 1.0  # motion / keypress
-    rot_speed = 0.1    # rad / keypress
-    spin_speed = 0.01  # rad / frame
-    auto_spin = False
-    cycle_models = False
+PROTEIN_BB_ATOMS = ["N", "CA", "C"]
+NUCLEIC_ACID_ATOMS = ["P", "O5'", "C5'", "C4'", "C3'", "O3'"]
+atoms_of_interest = PROTEIN_BB_ATOMS + NUCLEIC_ACID_ATOMS
 
+
+def get_coords_schrodinger(struc, chains):
+    from schrodinger import structure
+    coords, info, connections  = [], {}, []
+    atom_counter, res_counter = 0, 0
+    chain_ids = []
+    # make sure that all models have the same number of atoms
+    if len(set([st.atom_total for st in struc])) > 1:
+        print("Multiple models with varying number of atoms "
+              "are not supported.")
+        return None, None
+
+    for mi, model in enumerate(struc):
+        model_coords = []
+        for chain in model.chain:
+            chain_id = chain.name
+            if chains and chain_ids not in chains:
+                continue
+            if mi == 0:
+                chain_ids.append(chain_id)
+            prev_res = None
+            for res in structure.get_residues_by_connectivity(chain):
+                res_counter += 1 if mi == 0 else 0
+                res_n = res.resnum
+                for atom in res.atom:
+                    atom_counter += 1 if mi == 0 else 0
+                    if atom.pdbname.strip() in atoms_of_interest:
+                        if mi == 0 and len(model_coords) > 0:
+                            # Determine if the atom is connected to the previous atom
+                            connections.append(chain_id == last_chain_id and (res_n == (last_res_n + 1) or res_n == last_res_n))
+                        model_coords.append(atom.xyz)
+                        last_chain_id, last_res_n = chain_id, res_n
+        model_coords = np.array(model_coords)
+        if mi == 0:
+            if model_coords.shape[0] == 0:
+                print("Nothing to show")
+                return None, None
+            coords_mean = model_coords.mean(0)
+        model_coords -= coords_mean # Center on origin of first model
+        coords.append(model_coords)
+
+    info['chain_ids'] = chain_ids
+    info['model_coords'] = model_coords
+    info['atom_counter'] = atom_counter
+    info['res_counter'] = res_counter
+    info['num_struc'] = len(struc)
+    info['connections'] =  connections
+    return coords, info
+
+def get_coords_biopython(struc, chains):
+    # Get coordinates
+    coords, info, connections = [], {}, []
+    atom_counter, res_counter = 0, 0
+    chain_ids = []
+    for mi, model in enumerate(struc):
+        model_coords = []
+        for chain in model:
+            chain_id = chain.get_id()
+            if chains and chain_id not in chains:
+                continue
+            if mi == 0:
+                chain_ids.append(chain_id)
+            for res in chain:
+                res_counter += 1 if mi == 0 else 0
+                res_n = res.get_id()[1]
+                for atom in res:
+                    atom_counter += 1 if mi == 0 else 0
+                    if atom.get_name() in atoms_of_interest:
+                        if mi == 0 and len(model_coords) > 0:
+                            # Determine if the atom is connected to the previous atom
+                            connections.append(chain_id == last_chain_id and (res_n == (last_res_n + 1) or res_n == last_res_n))
+                        model_coords.append(atom.get_coord())
+                        last_chain_id, last_res_n = chain_id, res_n
+        model_coords = np.array(model_coords)
+        if mi == 0:
+            if model_coords.shape[0] == 0:
+                print("Nothing to show")
+                return None, None
+            coords_mean = model_coords.mean(0)
+        model_coords -= coords_mean # Center on origin of first model
+        coords.append(model_coords)
+
+    info['chain_ids'] = chain_ids
+    info['model_coords'] = model_coords
+    info['atom_counter'] = atom_counter
+    info['res_counter'] = res_counter
+    info['num_struc'] = len(struc)
+    info['connections'] =  connections
+    return coords, info
+
+def read_inputs(in_file, file_format, curr_model, chains):
     # Infer file format from extension
-    if file_format is None:
-        file_format = os.path.basename(in_file).rsplit(".", 1)[-1]
+    file_format = file_format or os.path.basename(in_file).rsplit(".", 1)[-1]
 
     # Handle stdin
     if in_file == "-":
@@ -34,9 +121,12 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
             sys.stdin = open("/dev/tty", "r")
         except:
             print("Piping structures not supported on this system (no /dev/tty)")
-            return
+            return None, None
     else:
         struct_file = in_file
+
+    # Use Biopython parser by default
+    get_coords = get_coords_biopython
 
     if file_format.lower() == "pdb":
         from Bio.PDB import PDBParser
@@ -49,56 +139,35 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
     elif file_format.lower() == "mmtf":
         from Bio.PDB.mmtf import MMTFParser
         struc = MMTFParser.get_structure(struct_file)
+    elif file_format.lower() in ["mae", "maegz"]:
+        from schrodinger import structure
+        struc = list(structure.StructureReader(struct_file))
+        get_coords = get_coords_schrodinger
     else:
         print("Unrecognised file format")
-        return
+        None, None
 
-    # Get backbone coordinates
-    coords = []
-    connections = []
-    atom_counter, res_counter = 0, 0
-    chain_ids = []
-    for mi, model in enumerate(struc):
-        model_coords = []
-        for chain in model:
-            chain_id = chain.get_id()
-            if len(chains) > 0 and chain_id not in chains:
-                continue
-            if mi == 0:
-                chain_ids.append(chain_id)
-            for res in chain:
-                if mi == 0:
-                    res_counter += 1
-                res_n = res.get_id()[1]
-                for atom in res:
-                    if mi == 0:
-                        atom_counter += 1
-                    if atom.get_name() in (
-                                    "N", "CA", "C", # Protein
-                                    "P", "O5'", "C5'", "C4'", "C3'", "O3'", # Nucleic acid
-                                ):
-                        if mi == 0 and len(model_coords) > 0:
-                            # Determine if the atom is connected to the previous atom
-                            connections.append(chain_id == last_chain_id and (res_n == (last_res_n + 1) or res_n == last_res_n))
-                        model_coords.append(atom.get_coord())
-                        last_chain_id, last_res_n = chain_id, res_n
-        model_coords = np.array(model_coords)
-        if mi == 0:
-            if model_coords.shape[0] == 0:
-                print("Nothing to show")
-                return
-            coords_mean = model_coords.mean(0)
-        model_coords -= coords_mean # Center on origin of first model
-        coords.append(model_coords)
-    coords = np.array(coords)
-    if curr_model > len(struc):
+    coords, info = get_coords(struc, chains)
+
+    if not coords or curr_model > len(coords):
         print("Can't find that model")
+        return None, None
+
+    return np.array(coords), info
+
+
+def view(in_file, file_format=None, curr_model=1, chains=[], box_size=100.0):
+    auto_spin = False
+    cycle_models = False
+
+    coords, info = read_inputs(in_file, file_format, curr_model, chains)
+    if not coords:
         return
 
     # Build help strings
-    info_str = "{} with {} models, {} chains ({}), {} residues, {} atoms".format(
-                    os.path.basename(in_file), len(struc), len(chain_ids),
-                    "".join(chain_ids), res_counter, atom_counter)
+    info_str = (f"{os.path.basename(in_file)} with {info['num_struc']} models, "
+                f"{len(info['chain_ids'])} chains ({''.join(info['chain_ids'])}) "
+                f"{info['res_counter']} residues, {info['atom_counter']} atoms.")
     help_str = "W/A/S/D rotates, T/F/G/H moves, I/O zooms, U spins, P cycles models, Q quits"
 
     # Make square bounding box of a set size and determine zoom
@@ -168,12 +237,14 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
                 zoom_rot_coords = zoom * np.matmul(rot_mat_y, np.matmul(rot_mat_x, trans_coords.T)).T
 
                 for i in range(coords.shape[1] - 1):
-                    if connections[i]:
-                        x_start, x_end = float(zoom_rot_coords[i, 0]), float(zoom_rot_coords[i + 1, 0])
-                        y_start, y_end = float(zoom_rot_coords[i, 1]), float(zoom_rot_coords[i + 1, 1])
-                        if x_min < x_start < x_max and x_min < x_end < x_max and y_min < y_start < y_max and y_min < y_end < y_max:
-                            for x, y in line(x_start, y_start, x_end, y_end):
-                                points.append([x, y])
+                    if not info['connections'][i]:
+                        continue
+                    x_start, x_end = float(zoom_rot_coords[i, 0]), float(zoom_rot_coords[i + 1, 0])
+                    y_start, y_end = float(zoom_rot_coords[i, 1]), float(zoom_rot_coords[i + 1, 1])
+                    # check if the bond fits in the box
+                    if x_min < x_start < x_max and x_min < x_end < x_max and y_min < y_start < y_max and y_min < y_end < y_max:
+                        for x, y in line(x_start, y_start, x_end, y_end):
+                            points.append([x, y])
 
                 # Update displayed structure
                 canvas.clear()
@@ -189,7 +260,7 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
                 do_update = True
             if cycle_models:
                 curr_model += 1
-                if curr_model > len(struc):
+                if curr_model > len(coords):
                     curr_model = 1
                 do_update = True
 
@@ -220,7 +291,7 @@ def view_protein(in_file, file_format=None, curr_model=1, chains=[], box_size=10
                         rot_y += rot_speed
                     elif c in (ord("u"), ord("U")):
                         auto_spin = not auto_spin
-                    elif c in (ord("p"), ord("P")) and len(struc) > 1:
+                    elif c in (ord("p"), ord("P")) and len(coords) > 1:
                         cycle_models = not cycle_models
                     elif c in (ord("q"), ord("Q")):
                         return
